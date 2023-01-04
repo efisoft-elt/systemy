@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "systemy"
-version = "0.1.0"
+version = "0.1.1"
 description = "A core package to manipulate model or system hierarchical classes"
 authors = ["Sylvain Guieu <sylvain.guieu@gmail.com>"]
 readme = "README.md"
@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.7"
 pydantic = "^1.9.0"
 pyyaml = "^6.0"
+attrs = "^22.2.0"
+py-expression-eval = "^0.3.14"
 
 
 [build-system]
