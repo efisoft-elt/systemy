@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "systemy"
+version = "0.1.0"
+description = "A core package to manipulate model or system hierarchical classes"
+authors = ["Sylvain Guieu <sylvain.guieu@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+pydantic = "^1.9.0"
+pyyaml = "^6.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
