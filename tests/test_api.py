@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 import pytest
 
-from systemy.system import BaseSystem, BaseConfig, FactoryDict, FactoryList 
+from systemy.system import BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemList 
 
 def test_config_class_creation():
     
@@ -170,9 +170,38 @@ def test_children_iterator():
     assert list( s.children( (S1,S2) )) == ["s1", "s2"] 
     
 
+def test_append_factory_in_list():
+    class S(BaseSystem):
+        pass 
 
+    class SS(BaseSystem):
+        class Config:
+            l2: List[S.Config] = []
+        l = FactoryList()
+    ss = SS()
+    ss.l.append( S.Config() )
+    assert isinstance( ss.l, SystemList)
+    assert isinstance( ss.l[0], S)
+    ss.l.extend( [S.Config(), S.Config()])
+    assert isinstance( ss.l[-1], S)
+    ss.l.insert(-1, S.Config())
+    assert isinstance( ss.l[0], S)
 
+def test_append_factory_in_dict():
+    class S(BaseSystem):
+        pass 
 
+    class SS(BaseSystem):
+        class Config:
+            d: Dict[str, S.Config] = {}
+            
+    ss = SS()
+    ss.d["one"] = S.Config() 
+    assert isinstance( ss.d["one"], S)
+    ss.d.update( two = S.Config() )
+    assert isinstance( ss.d["two"], S)  
+
+test_append_factory_in_dict()
 # test_factory_list()
 # test_find()
 # # test_subclass_system()

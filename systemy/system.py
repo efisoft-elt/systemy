@@ -128,9 +128,11 @@ class FactoryDict(BaseFactory, UserDict):
         if not isinstance(value, self.__Factory__):
             raise KeyError( f'item {key} is not a {self.__Factory__.__name__}')
     def build(self, parent=None, name="") -> "SystemDict":
-        return SystemDict( 
+        system_dict =  SystemDict( 
                 {key:factory.build(parent, name+"['"+str(key)+"']") for key,factory in self.items() })
-
+        if parent:
+            system_dict.__get_parent__ = weakref.ref(parent) 
+        return system_dict 
 
 
 class FactoryList(BaseFactory, UserList):
@@ -138,6 +140,8 @@ class FactoryList(BaseFactory, UserList):
     __Factory__ = None
     def __init__(self, __root__=None, __Factory__=BaseFactory):
         self.__dict__['__Factory__'] = __Factory__
+        if __root__ is None:
+            __root__ = []
         super().__init__(__root__=__root__)
         
     @property
@@ -149,9 +153,12 @@ class FactoryList(BaseFactory, UserList):
         if not isinstance(value, self.__Factory__):
             raise KeyError( f'item {index} is not a Factory')
     def build(self, parent=None, name="") -> "SystemList":
-        return SystemList( 
+        system_list = SystemList( 
                 [factory.build(parent, name+"["+str(i)+"]") for i, factory in enumerate(self) ]
             )
+        if parent:
+            system_list.__get_parent__ = weakref.ref(parent) 
+        return system_list 
 
 
 
@@ -376,9 +383,7 @@ class BaseSystem(ABC):
 class SystemDict(UserDict):
 
     def __setitem__(self, key, system):
-        if not isinstance(system, (BaseSystem, SystemDict, SystemList)):
-            raise KeyError(f"item {key} is not an iterable system")
-        super().__setitem__(key, system)    
+        super().__setitem__(key, self.__parse_item__(system, key))    
             
     def find(self, SystemType: Type[BaseSystem], depth: int =0):
         for system in self.values():
@@ -388,13 +393,32 @@ class SystemDict(UserDict):
                 for other in system.find( SystemType, depth -1):
                     yield other 
 
+    def __parse_item__(self, item, key):
+        if isinstance( item, BaseFactory):
+            item = self.__factory_item_builder__(item, key) 
+
+        if not isinstance(item, (BaseSystem, SystemDict, SystemList)):
+            raise KeyError(f"new item is not an iterable system")
+        return item 
+    
+    def __get_parent__(self):
+        raise ValueError("This SystemList is not attached to any parent")
+    
+    def __factory_item_builder__(self, factory, key):
+        parent = self.__get_parent__()
+        return factory.build(parent, "["+repr(key)+"]") 
 
 
 class SystemList(UserList):
-            
+    def append(self, item):
+        super().append(self.__parse_item__(item))
+    def extend(self, items):
+        super().extend( self.__parse_item__(item) for item in items)
+    def insert(self, i, item):
+        super().insert( i, self.__parse_item__(item, i))
+        
     def __setitem__(self, index, system):
-        if not isinstance(system, (BaseSystem, SystemDict, SystemList)):
-            raise KeyError(f"item {index} is not an iterable system")
+        system = self.__parse_item__(system , index)
         super().__setitem__(index, system)    
             
     def find(self, SystemType: Type[BaseSystem], depth: int =0):
@@ -404,8 +428,23 @@ class SystemList(UserList):
             if depth and _is_subsystem_iterable(system):
                 for other in system.find( SystemType, depth -1):
                     yield other 
+    
+    def __parse_item__(self, item, index=None):
+        if index is None: index = len(self)
+        if isinstance( item, BaseFactory):
+            item = self.__factory_item_builder__(item, index) 
 
-
+        if not isinstance(item, (BaseSystem, SystemDict, SystemList)):
+            raise KeyError(f"new item is not an iterable system")
+        return item 
+    
+    def __get_parent__(self):
+        raise ValueError("This SystemList is not attached to any parent")
+    
+    def __factory_item_builder__(self, factory, index):
+        parent = self.__get_parent__()
+        return factory.build(parent, "["+str(index)+"]") 
+        
 def _is_subsystem_iterable(system):
     return isinstance( system , (BaseSystem, SystemDict, SystemList))
 
