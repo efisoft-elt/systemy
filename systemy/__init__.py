@@ -6,7 +6,8 @@ from .system import (
         SystemList, 
         SystemDict, 
         FactoryDict, 
-        FactoryList
+        FactoryList, 
+        find_factories
     )
 from .loaders import (
         SystemLoader,

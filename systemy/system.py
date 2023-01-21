@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from pydantic import create_model, Field, BaseModel
 import weakref 
-from typing import Any, Dict, Iterable, List, Optional, Type, get_type_hints
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, get_type_hints
 from collections import UserDict, UserList
 
 from pydantic.config import Extra
@@ -118,7 +118,10 @@ class FactoryDict(BaseFactory, UserDict):
     def __init__(self, __root__=None, __Factory__=BaseFactory):
         self.__dict__['__Factory__'] = __Factory__
         super().__init__(__root__=__root__)
-        
+    
+    @classmethod 
+    def get_system_class(cls):
+        return SystemDict
     @property
     def data(self):
         return self.__root__
@@ -143,7 +146,9 @@ class FactoryList(BaseFactory, UserList):
         if __root__ is None:
             __root__ = []
         super().__init__(__root__=__root__)
-        
+    @classmethod 
+    def get_system_class(cls):
+        return SystemList 
     @property
     def data(self):
         return self.__root__
@@ -360,8 +365,11 @@ class BaseSystem(ABC):
     def find(self, SystemType: Type["BaseSystem"], depth: int=0)-> Iterable:
         # self._build_all()
         for attr in dir(self):
-            if attr.startswith("__"): continue 
-            obj = getattr(self, attr)
+            if attr.startswith("__"): continue
+            try: # durty patch to avoid side effect 
+                obj = getattr(self, attr)
+            except (ValueError, AttributeError, KeyError):
+                continue 
             if isinstance(obj, SystemType):
                 yield obj
 
@@ -374,7 +382,12 @@ class BaseSystem(ABC):
             SystemType = BaseSystem
         for attr in dir(self):
             if attr.startswith("__"): continue 
-            obj = getattr(self, attr)
+            # obj = getattr(self, attr)
+            try:
+                obj = getattr(self, attr)
+            except (ValueError, AttributeError, KeyError):
+                continue 
+
             if isinstance(obj, SystemType):
                 yield attr
 
@@ -449,3 +462,80 @@ def _is_subsystem_iterable(system):
     return isinstance( system , (BaseSystem, SystemDict, SystemList))
 
 
+def find_factories(cls,  
+        SubClass=(BaseSystem, SystemDict, SystemList), 
+        include:Optional[set] = None, 
+        exclude:Optional[set] = None
+    )-> List[Tuple[str, BaseFactory]]:
+    """ find factories defined inside a system class 
+
+    The factories are matched thanks to a Class or a tuple of Classes 
+    of subsystems built by the factory
+    
+    Note1 find_factories is a generator
+    Note2 all attribute starting with "__" are skiped 
+    Note3 find_factories is not recursive
+
+    Args:
+        cls : The root class to search 
+        SubClass (optional, Type, Tuple[Type]): match the System class(es)
+            which shall be created to the factory  
+        include (optional, set[str]): A set of str attribute to include only
+        exclude (optional, set[str]): Exclude this set of attribute 
+
+    Returns:
+        generator of tuple of: 
+            attr (str): attribute name 
+            factory (BaseFactory): matched factories  
+    """
+    
+    found = set()
+    iterator = dir(cls) if include is None else include
+    
+    if exclude is None: 
+        exclude = set() 
+    for attr in iterator:
+        if attr.startswith("__"): continue
+        if attr == "Config": continue 
+        if attr in exclude: continue
+        
+        try:
+            obj = getattr( cls, attr)
+        except AttributeError:
+            continue 
+        if not isinstance(obj, BaseFactory):
+            continue
+        
+        try:
+            System  = obj.get_system_class()
+        except ValueError:
+            continue
+
+        if not issubclass(System, SubClass):
+            continue 
+        found.add(attr)
+        yield (attr,obj) 
+        
+                    
+    for attr, field in cls.Config.__fields__.items():
+        if attr in found: continue 
+        
+        try:
+            obj = field.get_default()
+        except (ValueError, TypeError):
+            continue 
+        
+        if not isinstance(obj, BaseFactory):
+            continue 
+        
+        try:
+            System  = obj.get_system_class()
+        except ValueError:
+            continue
+       
+        if not issubclass(System, SubClass):
+            continue 
+        
+        yield (attr, obj)
+    
+        

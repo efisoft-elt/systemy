@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 import pytest
 
-from systemy.system import BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemList 
+from systemy.system import BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemDict, SystemList , find_factories
 
 def test_config_class_creation():
     
@@ -201,7 +201,29 @@ def test_append_factory_in_dict():
     ss.d.update( two = S.Config() )
     assert isinstance( ss.d["two"], S)  
 
-test_append_factory_in_dict()
+
+def test_find_factories():
+    class B(BaseSystem):
+        pass 
+    class A(BaseSystem):
+        f1 = B.Config() 
+        f2 = B.Config()
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
+    
+    class A(BaseSystem):
+        f1 = B.Config() 
+        l = FactoryList( [B.Config()] )
+
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
+    class A(BaseSystem):
+        f1 = B.Config() 
+        l = FactoryList( [B.Config()] )
+        d = FactoryDict( {"b":B.Config()} )
+
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
+    assert len(list(find_factories(A, (B, SystemList, SystemDict)))) == 3
+
+# test_append_factory_in_dict()
 # test_factory_list()
 # test_find()
 # # test_subclass_system()
