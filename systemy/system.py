@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from pydantic import create_model, Field, BaseModel
 import weakref 
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, get_type_hints
@@ -266,19 +267,38 @@ def _create_factory_attributes(Config: BaseConfig) -> dict:
     """ Populate ParentClass with any Sub-System Configuration found in Config """
     attributes = {}
     for name, field in Config.__fields__.items():
-        if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
-            if field.sub_fields:
-                sub = field.sub_fields[0]
-                if field.key_field:
-                    attributes[name] =  SubsystemDictAttribute(name)
-                else:
-                    attributes[name] = SubsystemListAttribute(name)
-            else:
-                if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
-                    attributes[name] = SubsystemAttribute(name)# field.default
-        else:    
+        field_type = _get_field_type(field)
+
+        if field_type == MemberType.FactoryDict:
+            attributes[name] =  SubsystemDictAttribute(name)
+        elif field_type == MemberType.FactoryList:
+            attributes[name] = SubsystemListAttribute(name)
+        elif field_type == MemberType.Factory:
+            attributes[name] = SubsystemAttribute(name)
+        else:
             attributes[name] = ConfigAttribute(name)
+
     return attributes 
+
+class MemberType(Enum):
+    FactoryList = "list"
+    FactoryDict = "dict"
+    Factory = "factory"
+    Other = "other"
+
+def _get_field_type(field)->MemberType:
+    if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
+        if field.sub_fields:
+            if field.key_field:
+                return MemberType.FactoryDict
+            else:
+                return MemberType.FactoryList
+        else:
+            if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
+                return MemberType.Factory 
+    else:
+        return MemberType.Other
+    
 
 def _set_factory_attributes(ParentClass: "BaseSystem", attributes: Dict) -> None:
     """ Set a dictionary of attributes into the class """
@@ -405,6 +425,16 @@ class SystemDict(UserDict):
             if depth and _is_subsystem_iterable(system):
                 for other in system.find( SystemType, depth -1):
                     yield other 
+    
+    def children(self, SystemType: Optional[Type["BaseSystem"]] = None):
+        return 
+        yield 
+     
+    def reconfigure( self, __d__: Optional[Dict[str, Any]] = None, **kwargs):
+        if __d__: 
+            kwargs = dict(__d__, **kwargs)
+        if kwargs: raise ValueError( "SystemDict is not reconfigurable" )
+
 
     def __parse_item__(self, item, key):
         if isinstance( item, BaseFactory):
@@ -442,6 +472,15 @@ class SystemList(UserList):
                 for other in system.find( SystemType, depth -1):
                     yield other 
     
+    def children(self, SystemType: Optional[Type["BaseSystem"]] = None):
+        return 
+        yield 
+     
+    def reconfigure( self, __d__: Optional[Dict[str, Any]] = None, **kwargs):
+        if __d__: 
+            kwargs = dict(__d__, **kwargs)
+        if kwargs: raise ValueError( "SystemDict is not reconfigurable" )
+
     def __parse_item__(self, item, index=None):
         if index is None: index = len(self)
         if isinstance( item, BaseFactory):
@@ -516,26 +555,48 @@ def find_factories(cls,
         found.add(attr)
         yield (attr,obj) 
         
-                    
-    for attr, field in cls.Config.__fields__.items():
+    fields = cls.Config.__fields__                 
+    iterator = fields if include is None else include
+    for attr  in iterator:
+         
         if attr in found: continue 
+        if attr in exclude: continue
+        try:
+            field = fields[attr] 
+        except KeyError:
+            continue 
+        
         
         try:
             obj = field.get_default()
         except (ValueError, TypeError):
             continue 
         
-        if not isinstance(obj, BaseFactory):
-            continue 
-        
-        try:
-            System  = obj.get_system_class()
-        except ValueError:
+        field_type =  _get_field_type(field) 
+        if field_type == MemberType.Other:
             continue
-       
-        if not issubclass(System, SubClass):
-            continue 
         
-        yield (attr, obj)
+
+        if field_type == MemberType.FactoryList:
+            if isinstance(obj, FactoryList):
+                yield (attr, obj)
+            else:
+                yield (attr, FactoryList(obj))
+        
+        elif field_type == MemberType.FactoryDict:
+            if isinstance(obj, FactoryDict):
+                yield (attr, obj)
+            else:
+                yield (attr, FactoryDict(obj))
+        else: 
+            try:
+                System  = obj.get_system_class()
+            except ValueError:
+                continue
+           
+            if not issubclass(System, SubClass):
+                continue 
+            
+            yield (attr, obj)
     
         

@@ -178,14 +178,23 @@ def test_append_factory_in_list():
         class Config:
             l2: List[S.Config] = []
         l = FactoryList()
+
     ss = SS()
     ss.l.append( S.Config() )
+
+
+    # assert isinstance( ss.l, BaseSystem)
     assert isinstance( ss.l, SystemList)
     assert isinstance( ss.l[0], S)
     ss.l.extend( [S.Config(), S.Config()])
     assert isinstance( ss.l[-1], S)
     ss.l.insert(-1, S.Config())
     assert isinstance( ss.l[0], S)
+    
+    # assert isinstance( ss.l2, BaseSystem)
+    assert len( list(find_factories(SS, (BaseSystem, SystemList)))) == 2
+    
+    assert list(ss.l.children( BaseSystem)) == []
 
 def test_append_factory_in_dict():
     class S(BaseSystem):
