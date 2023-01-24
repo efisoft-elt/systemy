@@ -196,10 +196,10 @@ class SubsystemAttribute:
 
     def __get__(self, parent, cls=None):
         if parent is None: return self
-        config = getattr( parent.__config__, self.attr)
-        if config is None:
+        factory = getattr( parent.__config__, self.attr)
+        if factory is None:
             return None
-        return config._build_and_save_in_parent(parent, self.alias or self.attr)
+        return factory._build_and_save_in_parent(parent, self.alias or self.attr)
     
     def __set_name__(self, parent, name):
         if self.attr is None:
@@ -213,8 +213,8 @@ class SubsystemDictAttribute:
 
     def __get__(self, parent, cls=None):
         if parent is None: return self
-        config = getattr( parent.__config__, self.attr)
-        return FactoryDict(config)._build_and_save_in_parent( parent, self.alias or self.attr)
+        factories = getattr( parent.__config__, self.attr)
+        return FactoryDict(factories)._build_and_save_in_parent( parent, self.alias or self.attr)
     
     def __set_name__(self, parent, name):
         if self.attr is None:
@@ -228,8 +228,8 @@ class SubsystemListAttribute:
 
     def __get__(self, parent, cls=None):
         if parent is None: return self
-        config = getattr( parent.__config__, self.attr)
-        return FactoryList(config)._build_and_save_in_parent( parent, self.alias or self.attr)
+        factories = getattr( parent.__config__, self.attr)
+        return FactoryList(factories)._build_and_save_in_parent( parent, self.alias or self.attr)
     
     def __set_name__(self, parent, name):
         if self.attr is None:
@@ -339,6 +339,8 @@ def systemclass(cls, **kwargs):
 class BaseSystem(ABC):
     __config__ = None  
     _allow_config_assignment = False
+    __factory_classes__ = set() 
+
     class Config(BaseConfig):
         ...
     
@@ -599,4 +601,26 @@ def find_factories(cls,
             
             yield (attr, obj)
     
-        
+
+
+def factory(SystemClass):
+    """ a decorator on a factory class 
+
+    this does a few things: 
+        - It implement the get_system_class method if not implemented
+            by adding a weakref to the targeted SystemClass 
+        - It add the factory class to the set of __factory_classes__ inside BaseSystem (for future use)
+    """
+    if not issubclass( SystemClass, BaseSystem):
+        raise ValueError("factory(cls) expect a BaseSystem class")
+    def factory_class_decorator(cls):
+        try:
+            cls.get_system_class()
+        except (NotImplementedError, ValueError):
+            cls.get_system_class = weakref.ref(SystemClass)
+        SystemClass.__factory_classes__.add( cls )
+        return cls 
+    return factory_class_decorator
+
+
+
