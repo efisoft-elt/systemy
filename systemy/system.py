@@ -384,13 +384,29 @@ class BaseSystem(ABC):
         for key, value in kwargs.items():
              setattr(self.__config__, key, value)
 
+    # def find(self, SystemType: Type["BaseSystem"], depth: int=0)-> Iterable:
+    #     # self._build_all()
+    #     for attr in dir(self):
+    #         if attr.startswith("__"): continue
+    #         try: # durty patch to avoid side effect 
+    #             obj = getattr(self, attr)
+    #         except (ValueError, AttributeError, KeyError):
+    #             continue 
+    #         if isinstance(obj, SystemType):
+    #             yield obj
+
+    #         if depth and _is_subsystem_iterable(obj):
+    #             for other in obj.find(SystemType, depth-1):
+    #                 yield other 
+    
     def find(self, SystemType: Type["BaseSystem"], depth: int=0)-> Iterable:
         # self._build_all()
+         
         for attr in dir(self):
             if attr.startswith("__"): continue
             try: # durty patch to avoid side effect 
                 obj = getattr(self, attr)
-            except (ValueError, AttributeError, KeyError):
+            except (ValueError, AttributeError, KeyError) as e:
                 continue 
             if isinstance(obj, SystemType):
                 yield obj
@@ -600,6 +616,25 @@ def find_factories(cls,
                 continue 
             
             yield (attr, obj)
+    
+def has_factory(cls, attr):
+    try:
+        factory = getattr(cls,attr)
+    except AttributeError:
+        try: 
+            field = cls.Config.__fields__[attr]
+        except KeyError:
+            return False
+
+        field_type =  _get_field_type(field)
+        if field_type == MemberType.Other:
+            return False 
+        return True 
+    
+    print( factory )
+    if not isinstance(factory,BaseFactory):
+        return False
+    return True
     
 
 

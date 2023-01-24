@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 import pytest
 
-from systemy.system import BaseFactory, BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemDict, SystemList, factory , find_factories
+from systemy.system import BaseFactory, BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemDict, SystemList, factory , find_factories,  has_factory
 
 def test_config_class_creation():
     
@@ -234,7 +234,22 @@ def test_find_factories():
     assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
     assert len(list(find_factories(A, (B, SystemList, SystemDict)))) == 3
 
+def test_has_factory():
+    class X(BaseSystem):
+        pass 
 
+    class A(BaseSystem):
+        class Config: 
+            f1 = X.Config()
+            f2: List[X.Config] = [] 
+        f3 = X.Config()
+        f4 = FactoryList()
+    
+    assert has_factory(A, "f1")
+    assert has_factory(A, "f2")
+    assert has_factory(A, "f3")
+    # assert has_factory(A, "f4")
+test_has_factory()
 
 def test_factory_decorator():
     
