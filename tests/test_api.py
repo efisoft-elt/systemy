@@ -70,9 +70,10 @@ def test_factory_dict():
     class House(BaseSystem):
         class Config:
             # rooms : FactoryDict[str, BaseConfig]  = FactoryDict( {'bedroom': Room.Config(width=9), 'livingroom': Room.Config()} )
-            rooms : Dict[str, Room.Config]  = {'bedroom': Room.Config(width=9),  'livingroom': Room.Config()}
+            rooms : FactoryDict[str, Room.Config]  = {'bedroom': Room.Config(width=9),  'livingroom': Room.Config()}
     house = House()
     rs = house.rooms
+    
     assert isinstance( rs['bedroom'], BaseSystem)
     assert house.rooms['bedroom'].width == 9
     assert len( list(house.find( Room, 1))) == 2
@@ -93,7 +94,7 @@ def test_factory_list():
 
     class House(BaseSystem):
         class Config:
-            rooms: List[Room.Config] = [Room.Config(), Room.Config(width=9)]
+            rooms: FactoryList[Room.Config] = [Room.Config(), Room.Config(width=9)]
         
         garages = FactoryList([Room.Config()])
 
@@ -176,8 +177,8 @@ def test_append_factory_in_list():
 
     class SS(BaseSystem):
         class Config:
-            l2: List[S.Config] = []
-            l3: List[S.Config] = FactoryList()
+            l2: FactoryList[S.Config] = []
+            l3: FactoryList[S.Config] = FactoryList()
 
         l = FactoryList()
 
@@ -205,7 +206,7 @@ def test_append_factory_in_dict():
 
     class SS(BaseSystem):
         class Config:
-            d: Dict[str, S.Config] = {}
+            d: FactoryDict[str, S.Config] = {}
             
     ss = SS()
     ss.d["one"] = S.Config() 
@@ -242,7 +243,7 @@ def test_has_factory():
     class A(BaseSystem):
         class Config: 
             f1 = X.Config()
-            f2: List[X.Config] = [] 
+            f2: FactoryList[X.Config] = [] 
         f3 = X.Config()
         f4 = FactoryList()
     
@@ -273,8 +274,8 @@ def test_mutation_of_list_and_dict_default():
 
     class A(BaseSystem):
         class Config:
-            l: List[X.Config] = []
-            d: Dict[str, X.Config] = {}
+            l: FactoryList[X.Config] = []
+            d: FactoryDict[str, X.Config] = {}
 
     assert isinstance( A.Config.__fields__["l"].get_default(), FactoryList)
     assert isinstance( A.Config.__fields__["d"].get_default(), FactoryDict)

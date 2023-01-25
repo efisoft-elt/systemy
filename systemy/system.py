@@ -2,11 +2,12 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from pydantic import create_model, Field, BaseModel
 import weakref 
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, get_type_hints
+from typing import Any, Dict, Generic, Iterable, List, Optional, Tuple, Type, TypeVar, get_type_hints
 from collections import UserDict, UserList
 
 from pydantic.config import Extra
-from pydantic.fields import PrivateAttr
+from pydantic.error_wrappers import ValidationError
+from pydantic.fields import ModelField, PrivateAttr
 
 
 
@@ -18,14 +19,27 @@ class MemberType(Enum):
 
 def _get_field_type(field)->MemberType:
     if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
+        if issubclass( field.type_, FactoryDict): return MemberType.FactoryDict 
+        if issubclass( field.type_, FactoryList): return MemberType.FactoryList
+
+
         if field.sub_fields:
             if field.key_field:
-                return MemberType.FactoryDict
+                if issubclass( field.sub_fields[0].type_, BaseFactory): 
+
+                    return MemberType.FactoryDict
+                else:
+                    return MemberType.Other 
+
+
             else:
-                return MemberType.FactoryList
+                if issubclass( field.sub_fields[0].type_, BaseFactory): 
+                    return MemberType.FactoryList
         else:
             if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
-                return MemberType.Factory 
+                return MemberType.Factory
+            return MemberType.Other 
+
     else:
         return MemberType.Other
     
@@ -72,11 +86,19 @@ class BaseFactory(BaseModel, ABC):
         
             if field_type == MemberType.FactoryDict:
                 if field.default is not None and not isinstance(  field.default, FactoryDict ):
-                    field.default = FactoryDict( field.default )
+                    if issubclass( field.type_, FactoryDict):
+                        field.default = field.type_( field.default )
+                    # else:
+                    elif issubclass( field.type_, dict) :
 
+                        raise ValueError(f"Hey Dict!!!!! {field.type_} {field.default}" )
             elif field_type == MemberType.FactoryList:
                 if field.default is not None and not isinstance(  field.default, FactoryList ):
-                    field.default = FactoryList( list(field.default) )
+                    if issubclass( field.type_, FactoryList):
+                        field.default = field.type_( field.default )
+                    elif issubclass( field.type_, list) :
+                        
+                        raise ValueError(f"Hey List !!!!! {field.type_} {field.default}")
 
     @classmethod
     def get_system_class(cls):
@@ -151,7 +173,16 @@ class BaseConfig(BaseFactory):
 
 
 
-class FactoryDict(BaseFactory, UserDict):
+class FactoryDictMeta(type(BaseModel)):
+    def __getitem__(cls, items):
+        if (len(items)!=2):
+            raise ValueError(f"expected 2  parameters for FactoryDict[k,f]; actual {len(items)} ")
+        Key, Factory = items 
+        if not issubclass( Factory, BaseFactory):
+            raise ValueError( "expecting a subclass of BaseFactory for FactoryList" )
+        return create_model( cls.__name__+"Customized", __base__=cls, __root__=(Dict[Key, Factory], ...))
+
+class FactoryDict(BaseFactory, UserDict,  metaclass=FactoryDictMeta ):
     __root__: Dict[str, BaseFactory] = {}
     __Factory__ = None
     def __init__(self, __root__=None, __Factory__=BaseFactory):
@@ -173,13 +204,23 @@ class FactoryDict(BaseFactory, UserDict):
             raise KeyError( f'item {key} is not a {self.__Factory__.__name__}')
     def build(self, parent=None, name="") -> "SystemDict":
         system_dict =  SystemDict( 
-                {key:factory.build(parent, name+"['"+str(key)+"']") for key,factory in self.items() })
+                {key:factory.build(parent, name+"['"+str(key)+"']") for key,factory in self.items() }
+                )
         if parent:
             system_dict.__get_parent__ = weakref.ref(parent) 
         return system_dict 
 
 
-class FactoryList(BaseFactory, UserList):
+class FactoryListMeta(type(BaseModel)):
+    def __getitem__(cls, items):
+        if isinstance(items, tuple) and (len(items)!=1):
+            raise ValueError(f"expected 1  parameters for FactoryList[f]; actual {len(items)} ")
+        Factory = items 
+        if not issubclass( Factory, BaseFactory):
+            raise ValueError( "expecting a subclass of BaseFactory for FactoryList" )
+        return create_model( cls.__name__+"Customized", __base__=cls, __root__=(List[Factory], ...))
+
+class FactoryList(BaseFactory, UserList, metaclass=FactoryListMeta):
     __root__: List[BaseFactory] = []
     __Factory__ = None
     def __init__(self, __root__=None, __Factory__=BaseFactory):
@@ -692,5 +733,37 @@ def factory(SystemClass):
         return cls 
     return factory_class_decorator
 
+
+if __name__ == "__main__":
+    class X(BaseSystem):
+        class Config:
+            x: int =0
+    class X2(BaseSystem):
+        class Config:
+            x: int =1 
+    
+
+    class MyYoFD(FactoryDict):
+        def toto(self): return  1 
+
+    class M(BaseModel):
+
+        # d: FactoryDictVar[str, BaseFactory] = {}
+        # d2: FactoryDict[str, BaseFactory] = {}  
+        d2: FactoryDict[str, X.Config]= {}  
+        d3: FactoryDict = FactoryDict()
+        d4 = FactoryDict() 
+        d5: MyYoFD[int, X.Config] = {} 
+
+    # print( M(  d2 = {"a": X.Config(x=1)},  d3= {}  ) )
+
+    m =  M( d2= {'a':X2.Config()} , d4={}, d5={} )
+    print( m  ) 
+    print( m.d5.toto() )
+    print( m.__fields__['d5'])
+
+    class M(BaseModel):
+        l: FactoryList[X.Config] = []
+    M(l = [] )
 
 
