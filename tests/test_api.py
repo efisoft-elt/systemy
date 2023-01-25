@@ -98,13 +98,13 @@ def test_factory_list():
         garages = FactoryList([Room.Config()])
 
     house = House()
-
+    house.rooms
     assert house.rooms[1].width == 9
     assert len(house.rooms) == 2 
     assert house.rooms[1].__path__ == "rooms[1]"
     assert isinstance( house.garages[0], BaseSystem)
 
-
+test_factory_list()
 
 def test_set_config_attribute_must_be_value_error():
 
@@ -198,6 +198,7 @@ def test_append_factory_in_list():
     
     assert list(ss.l.children( BaseSystem)) == []
 
+
 def test_append_factory_in_dict():
     class S(BaseSystem):
         pass 
@@ -248,8 +249,8 @@ def test_has_factory():
     assert has_factory(A, "f1")
     assert has_factory(A, "f2")
     assert has_factory(A, "f3")
-    # assert has_factory(A, "f4")
-test_has_factory()
+    assert has_factory(A, "f4")
+
 
 def test_factory_decorator():
     
@@ -265,7 +266,31 @@ def test_factory_decorator():
     assert F.get_system_class() is A
     assert F in A.__factory_classes__
 
+
+def test_mutation_of_list_and_dict_default():
+    class X(BaseSystem):
+        pass 
+
+    class A(BaseSystem):
+        class Config:
+            l: List[X.Config] = []
+            d: Dict[str, X.Config] = {}
+
+    assert isinstance( A.Config.__fields__["l"].get_default(), FactoryList)
+    assert isinstance( A.Config.__fields__["d"].get_default(), FactoryDict)
+
+def test_factory_list_as_factory_list():
+    class X(BaseSystem):
+        pass 
+
+    class A(BaseSystem):
+        l: FactoryList = FactoryList()
+    assert A().l == []
 # test_append_factory_in_dict()
 # test_factory_list()
 # test_find()
 # # test_subclass_system()
+
+if __name__=="__main__":
+    from pydevmgr_elt import Motor 
+    print( "All good") 

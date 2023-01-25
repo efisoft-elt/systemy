@@ -10,6 +10,25 @@ from pydantic.fields import PrivateAttr
 
 
 
+class MemberType(Enum):
+    FactoryList = "list"
+    FactoryDict = "dict"
+    Factory = "factory"
+    Other = "other"
+
+def _get_field_type(field)->MemberType:
+    if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
+        if field.sub_fields:
+            if field.key_field:
+                return MemberType.FactoryDict
+            else:
+                return MemberType.FactoryList
+        else:
+            if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
+                return MemberType.Factory 
+    else:
+        return MemberType.Other
+    
 
 def _class_to_model_args(Cls: Type) -> dict:
     """ return dictionary of argument for a model creation and from regular class """     
@@ -37,9 +56,28 @@ def join_path(*args) -> str:
 class BaseFactory(BaseModel, ABC):
     __parent_attribute_name__ = PrivateAttr(None)
     
-    # class Config: #pydantic config  
-    #     extra = Extra.forbid
+    class Config: #pydantic config  
+        extra = Extra.forbid
     
+    def __init_subclass__(cls, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        # FactoryList is declared after. Is it acceptable to do like this ? 
+        try:
+            FactoryList
+        except NameError:
+            return 
+        # Mutate normal list or dict of Factory into FactoryList or FactoryDict
+        for name, field in cls.__fields__.items():
+            field_type = _get_field_type(field)
+        
+            if field_type == MemberType.FactoryDict:
+                if field.default is not None and not isinstance(  field.default, FactoryDict ):
+                    field.default = FactoryDict( field.default )
+
+            elif field_type == MemberType.FactoryList:
+                if field.default is not None and not isinstance(  field.default, FactoryList ):
+                    field.default = FactoryList( list(field.default) )
+
     @classmethod
     def get_system_class(cls):
         raise ValueError("This factory is not associated to a single System class")
@@ -117,9 +155,11 @@ class FactoryDict(BaseFactory, UserDict):
     __root__: Dict[str, BaseFactory] = {}
     __Factory__ = None
     def __init__(self, __root__=None, __Factory__=BaseFactory):
-        self.__dict__['__Factory__'] = __Factory__
+        if __root__ is None:
+            __root__ = {}
         super().__init__(__root__=__root__)
-    
+        self.__dict__['__Factory__'] = __Factory__
+
     @classmethod 
     def get_system_class(cls):
         return SystemDict
@@ -143,10 +183,11 @@ class FactoryList(BaseFactory, UserList):
     __root__: List[BaseFactory] = []
     __Factory__ = None
     def __init__(self, __root__=None, __Factory__=BaseFactory):
-        self.__dict__['__Factory__'] = __Factory__
         if __root__ is None:
             __root__ = []
         super().__init__(__root__=__root__)
+        self.__dict__['__Factory__'] = __Factory__
+
     @classmethod 
     def get_system_class(cls):
         return SystemList 
@@ -166,13 +207,17 @@ class FactoryList(BaseFactory, UserList):
             system_list.__get_parent__ = weakref.ref(parent) 
         return system_list 
 
-
+class BaseFactoryAttribute:
+    def get_attribute_config_class(self, cls):
+        field = cls.Config.__fields__[self.attr] 
+        return field.get_default()
 
 class ConfigAttribute:
     def __init__(self, attr=None):
         self.attr = attr
     def __get__(self, parent, cls=None):
-        if parent is None: return self 
+        if parent is None: return self
+        
         obj =  getattr( parent.__config__, self.attr)
         # this test should go away at some point 
         if isinstance(obj, BaseFactory):
@@ -189,13 +234,14 @@ class ConfigAttribute:
         if self.attr is None:
             self.attr = name 
 
-class SubsystemAttribute:
+class SubsystemAttribute(BaseFactoryAttribute):
     def __init__(self, attr=None, alias=None):
         self.attr = attr
         self.alias = alias 
 
     def __get__(self, parent, cls=None):
-        if parent is None: return self
+        if parent is None: return self.get_attribute_config_class(cls) 
+
         factory = getattr( parent.__config__, self.attr)
         if factory is None:
             return None
@@ -206,22 +252,27 @@ class SubsystemAttribute:
             self.attr = name 
 
 
-class SubsystemDictAttribute:
+class SubsystemDictAttribute(BaseFactoryAttribute):
     def __init__(self, attr=None, alias=None):
         self.attr = attr
         self.alias = alias 
 
     def __get__(self, parent, cls=None):
-        if parent is None: return self
+        if parent is None:       
+            return self
         factories = getattr( parent.__config__, self.attr)
-        return FactoryDict(factories)._build_and_save_in_parent( parent, self.alias or self.attr)
+        
+        if isinstance(factories, FactoryDict):
+            return factories._build_and_save_in_parent( parent, self.alias or self.attr)
+        else:
+            return FactoryDict(factories)._build_and_save_in_parent( parent, self.alias or self.attr)
     
     def __set_name__(self, parent, name):
         if self.attr is None:
             self.attr = name 
 
 
-class SubsystemListAttribute:
+class SubsystemListAttribute(BaseFactoryAttribute):
     def __init__(self, attr=None, alias=None):
         self.attr = attr
         self.alias = alias 
@@ -229,7 +280,11 @@ class SubsystemListAttribute:
     def __get__(self, parent, cls=None):
         if parent is None: return self
         factories = getattr( parent.__config__, self.attr)
-        return FactoryList(factories)._build_and_save_in_parent( parent, self.alias or self.attr)
+        if isinstance( factories, FactoryList):
+            return factories._build_and_save_in_parent( parent, self.alias or self.attr)
+        else:
+            return FactoryList(factories)._build_and_save_in_parent( parent, self.alias or self.attr)
+            
     
     def __set_name__(self, parent, name):
         if self.attr is None:
@@ -271,8 +326,15 @@ def _create_factory_attributes(Config: BaseConfig) -> dict:
 
         if field_type == MemberType.FactoryDict:
             attributes[name] =  SubsystemDictAttribute(name)
+            # mutate a normal dict to a Factorydict (this is safe because a copy)
+            # if field.default is not None and not isinstance(  field.default, FactoryDict ):
+            #     field.default = FactoryDict( field.default )
+
         elif field_type == MemberType.FactoryList:
             attributes[name] = SubsystemListAttribute(name)
+            # if field.default is not None and not isinstance(  field.default, FactoryList ):
+            #     field.default = FactoryList( list(field.default) )
+
         elif field_type == MemberType.Factory:
             attributes[name] = SubsystemAttribute(name)
         else:
@@ -280,25 +342,6 @@ def _create_factory_attributes(Config: BaseConfig) -> dict:
 
     return attributes 
 
-class MemberType(Enum):
-    FactoryList = "list"
-    FactoryDict = "dict"
-    Factory = "factory"
-    Other = "other"
-
-def _get_field_type(field)->MemberType:
-    if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
-        if field.sub_fields:
-            if field.key_field:
-                return MemberType.FactoryDict
-            else:
-                return MemberType.FactoryList
-        else:
-            if isinstance(field.type_, type) and issubclass( field.type_, BaseFactory):
-                return MemberType.Factory 
-    else:
-        return MemberType.Other
-    
 
 def _set_factory_attributes(ParentClass: "BaseSystem", attributes: Dict) -> None:
     """ Set a dictionary of attributes into the class """
@@ -384,37 +427,26 @@ class BaseSystem(ABC):
         for key, value in kwargs.items():
              setattr(self.__config__, key, value)
 
-    # def find(self, SystemType: Type["BaseSystem"], depth: int=0)-> Iterable:
-    #     # self._build_all()
-    #     for attr in dir(self):
-    #         if attr.startswith("__"): continue
-    #         try: # durty patch to avoid side effect 
-    #             obj = getattr(self, attr)
-    #         except (ValueError, AttributeError, KeyError):
-    #             continue 
-    #         if isinstance(obj, SystemType):
-    #             yield obj
-
-    #         if depth and _is_subsystem_iterable(obj):
-    #             for other in obj.find(SystemType, depth-1):
-    #                 yield other 
-    
     def find(self, SystemType: Type["BaseSystem"], depth: int=0)-> Iterable:
         # self._build_all()
-         
         for attr in dir(self):
             if attr.startswith("__"): continue
             try: # durty patch to avoid side effect 
                 obj = getattr(self, attr)
             except (ValueError, AttributeError, KeyError) as e:
-                continue 
+                
+                if has_factory( self.__class__, attr):
+                    raise e
+                else:
+                    continue 
             if isinstance(obj, SystemType):
                 yield obj
 
             if depth and _is_subsystem_iterable(obj):
                 for other in obj.find(SystemType, depth-1):
                     yield other 
-
+    
+  
     def children(self, SystemType: Optional[Type["BaseSystem"]] = None):
         if SystemType is None:
             SystemType = BaseSystem
@@ -572,7 +604,10 @@ def find_factories(cls,
             continue 
         found.add(attr)
         yield (attr,obj) 
-        
+    
+    if not issubclass(cls, BaseSystem):
+       return 
+
     fields = cls.Config.__fields__                 
     iterator = fields if include is None else include
     for attr  in iterator:
@@ -632,7 +667,7 @@ def has_factory(cls, attr):
         return True 
     
     print( factory )
-    if not isinstance(factory,BaseFactory):
+    if not isinstance(factory, (BaseFactory, BaseFactoryAttribute)):
         return False
     return True
     
