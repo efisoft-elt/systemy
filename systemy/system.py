@@ -72,7 +72,8 @@ class BaseFactory(BaseModel, ABC):
     
     class Config: #pydantic config  
         extra = Extra.forbid
-    
+        validate_assignment = True 
+
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         # FactoryList is declared after. Is it acceptable to do like this ? 
