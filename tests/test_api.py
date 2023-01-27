@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 import pytest
 
 from systemy.system import BaseFactory, BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemDict, SystemList, factory , find_factories,  has_factory
@@ -60,6 +60,22 @@ def test_find():
     assert house.bedroom.window.__path__ == "bedroom.window"
     assert isinstance(house.garage, BaseSystem)
     assert house.garage.__path__ == "garage"
+
+def test_find_for_extras():
+    class Room(BaseSystem):
+        class Config:
+            width: float = 1.0
+            height: float = 1.0
+    class House(BaseSystem, extra="allow"):
+        ...
+
+    house = House( 
+        bedroom = Room.Config(width=10, height=10), 
+        toilet = Room.Config( width=2.0, height=1.0)
+    )
+    assert len(list(house.find(Room))) == 2 
+
+
 
 def test_factory_dict():
     class Room(BaseSystem):
@@ -144,6 +160,25 @@ def test_optional_subsystem():
 
     s0 = S0()
     assert s0.s is None
+
+def test_factory_union():
+
+    
+    class S1(BaseSystem):
+        class Config:
+            x: int  = 1
+    class S2(BaseSystem):
+        ...
+
+    class S0(BaseSystem):
+        class Config:
+            s: Union[S1.Config, S2.Config] = S1.Config()
+    
+    s0 = S0( s=S2.Config() )
+    assert isinstance( s0.s, BaseSystem) 
+
+test_factory_union()
+
 
 def test_children_iterator():
     
@@ -236,6 +271,46 @@ def test_find_factories():
     assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
     assert len(list(find_factories(A, (B, SystemList, SystemDict)))) == 3
 
+def test_find_factories_in_config():
+    class B(BaseSystem):
+        pass 
+    class A(BaseSystem):
+        class Config:
+            f1 = B.Config() 
+            f2 = B.Config()
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
+    
+    class A(BaseSystem):
+        class Config:
+            f1 = B.Config() 
+            l = FactoryList( [B.Config()] )
+
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
+    class A(BaseSystem):
+        class Config:
+            f1 = B.Config() 
+            l = FactoryList( [B.Config()] )
+            d = FactoryDict( {"b":B.Config()} )
+
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 2
+    assert len(list(find_factories(A, (B, SystemList, SystemDict)))) == 3
+    # with a mix
+    MyList = FactoryList[B.Config]
+    class A(BaseSystem):
+        l1 = FactoryList( [B.Config()] )
+        f1 = B.Config() 
+        class Config:
+            f2 = B.Config() 
+            l2 = FactoryList( [B.Config()] )
+            l3 : MyList = [] # defult [] sould be mutated 
+            d = FactoryDict( {"b":B.Config()} )
+            f3: Optional[B.Config] = None
+    assert len(list(find_factories(A, (BaseSystem, SystemList)))) == 5
+    assert len(list(find_factories(A, (B, SystemList, SystemDict)))) == 6
+
+
+
+
 def test_has_factory():
     class X(BaseSystem):
         pass 
@@ -292,6 +367,36 @@ def test_factory_list_as_factory_list():
 # test_find()
 # # test_subclass_system()
 
+
+def test_config_assignment():
+    class S(BaseSystem):
+        class Config:
+            x = 1.0 
+    
+    s = S() 
+    assert s.x == 1.0 
+    with pytest.raises( ValueError):
+        s.x = 10.0 
+
+    class S(BaseSystem, allow_config_assignment=True):
+        class Config:
+            x = 1.0 
+    
+    s = S() 
+    assert s.x == 1.0 
+    s.x = 10.0 
+    assert s.x == 10.0
+
+
 if __name__=="__main__":
     from pydevmgr_elt import Motor 
-    print( "All good") 
+    print( "All good")
+    
+    class X(BaseSystem):
+        pass 
+    class F(BaseFactory):
+        s = X.Config()
+        l : FactoryList[X.Config] = []
+        d : FactoryDict = {}
+    # print(F.__system_factories__)
+    print( F.__system_factories__['l'].field.default)
