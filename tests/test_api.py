@@ -121,7 +121,6 @@ def test_factory_list():
     assert house.rooms[1].__path__ == "rooms[1]"
     assert isinstance( house.garages[0], BaseSystem)
 
-test_factory_list()
 
 def test_set_config_attribute_must_be_value_error():
 
@@ -177,7 +176,6 @@ def test_factory_union():
     s0 = S0( s=S2.Config() )
     assert isinstance( s0.s, BaseSystem) 
 
-test_factory_union()
 
 
 def test_children_iterator():
@@ -388,15 +386,35 @@ def test_config_assignment():
     assert s.x == 10.0
 
 
+# def test_system_composition():
+    # class A(BaseSystem):
+        # class Config:
+            # x: int = 1  
+    # class B(BaseSystem):
+        # class Config:
+            # y: int = 2
+    # print("AAAAAAAA")
+    # class C(A, B):
+        # class Config:
+            # z = 9
+    # print("BBBBBBBBB")
+    # c = C(z=9.1) 
+    # assert c.x == 1 
+    # assert c.y == 2  
+    # assert c.z == 9
+# test_system_composition()
+
+
 if __name__=="__main__":
-    from pydevmgr_elt import Motor 
-    print( "All good")
+    pass
+    # from pydevmgr_elt import Motor 
+    # print( "All good")
     
-    class X(BaseSystem):
-        pass 
-    class F(BaseFactory):
-        s = X.Config()
-        l : FactoryList[X.Config] = []
-        d : FactoryDict = {}
-    # print(F.__system_factories__)
-    print( F.__system_factories__['l'].field.default)
+    # class X(BaseSystem):
+    #     pass 
+    # class F(BaseFactory):
+    #     s = X.Config()
+    #     l : FactoryList[X.Config] = []
+    #     d : FactoryDict = {}
+    # # print(F.__system_factories__)
+    # print( F.__system_factories__['l'].field.default)

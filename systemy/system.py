@@ -279,12 +279,47 @@ class FactoryAttribute:
         if self.attr is None:
             self.attr = name 
 
+# def _rebuild_config_class(ParentClass: "BaseSystem", Config: BaseConfig, kwargs: Dict) -> Type[BaseConfig]:
+#     """ Rebuild the Config class associated to a ParentClass 
+
+#     At least the Config is always inerited in order to modify it with 
+#     new kwargs and to mutate the weak reference to the parent class
+#     """
+    
+#     ParentConfigClasses = []
+#     for subcl in ParentClass.__mro__[1:]:
+#         try:
+#             ParentConfigClass = getattr(subcl, "Config")
+#         except AttributeError:
+#             continue
+#         else:
+#             if not ParentConfigClass  in ParentConfigClasses:
+
+#                 ParentConfigClasses.append( ParentConfigClass)
+     
+#     if not issubclass(Config, BaseFactory):
+#         field_def = _class_to_model_args(Config)
+#     else:
+#         if not Config in ParentConfigClasses:
+#             ParentConfigClasses.append(Config)
+#         field_def = {}
+#     if not ParentConfigClasses:
+#         raise ValueError("Bug ! Not a subclass of BaseSystem")
+#     if kwargs:
+#         if "Config" in field_def: 
+#              raise TypeError("Specifying config in two places is ambiguous, use either Config attribute or class kwargs")
+#         field_def["Config"] = type("Config", tuple(), kwargs)
+#     NewConfig =  create_model(  ParentClass.__name__+".Config",  __base__= tuple(ParentConfigClasses),  **field_def)        
+#     return NewConfig
+
 def _rebuild_config_class(ParentClass: "BaseSystem", Config: BaseConfig, kwargs: Dict) -> Type[BaseConfig]:
     """ Rebuild the Config class associated to a ParentClass 
 
     At least the Config is always inerited in order to modify it with 
     new kwargs and to mutate the weak reference to the parent class
     """
+    
+         
     if not issubclass(Config, BaseFactory):
         for subcl in ParentClass.__mro__[1:]:
             try:
@@ -292,18 +327,18 @@ def _rebuild_config_class(ParentClass: "BaseSystem", Config: BaseConfig, kwargs:
             except AttributeError:
                 continue
             else:
-                break 
-        else:
-            raise ValueError("Cannot find a Config class")
+                break
+        else: 
+            raise ValueError("Cannot found config")
         field_def = _class_to_model_args(Config)
-        
+
     else:
-        ParentConfigClass = Config
+        ParentConfigClass = Config     
         field_def = {}
     if kwargs:
         if "Config" in field_def: 
              raise TypeError("Specifying config in two places is ambiguous, use either Config attribute or class kwargs")
-        field_def["Config"] = type("Config", tuple(), kwargs) 
+        field_def["Config"] = type("Config", tuple(), kwargs)
     NewConfig =  create_model(  ParentClass.__name__+".Config",  __base__= ParentConfigClass,  **field_def)        
     return NewConfig
 
