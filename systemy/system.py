@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pydantic import create_model, Field, BaseModel
@@ -377,8 +377,50 @@ def systemclass(cls,  allow_config_assignment=None, **kwargs):
         cls._allow_config_assignment = allow_config_assignment
     return cls
 
+def _collect_mro_config(mro):
+    for cls in mro:
+        try:
+            Config = cls.Config 
+        except AttributeError:
+            pass 
+        if isinstance( Config, BaseConfig):
+            yield Config 
 
-class BaseSystem(ABC):
+class SystemMeta(ABCMeta):
+    def __new__(cls, name, mro, kwargs, **model_config):
+        ParentConfigClass = tuple(_collect_mro_config(mro))
+        config_kwargs = {}
+        
+        allow_config_assignment = model_config.pop("allow_config_assignment", None)
+        try:
+            Config = kwargs["Config"]
+        except KeyError:
+            pass 
+        else:
+            if issubclass( Config, BaseConfig):
+                ParentConfigClass = (Config,)
+            else:
+                config_kwargs =  _class_to_model_args(Config)
+
+        if model_config:
+            if "Config" in config_kwargs: 
+                 raise TypeError("Specifying config in two places is ambiguous, use either Config attribute or class kwargs")
+            config_kwargs["Config"] = type("Config", tuple(), model_config)
+        
+        if not ParentConfigClass:
+            ParentConfigClass = BaseConfig
+        
+        NewConfig = create_model( name+"Config", __base__=ParentConfigClass, **config_kwargs)
+        kwargs["Config"] = NewConfig
+        System = ABCMeta.__new__(cls,  name, mro, kwargs)
+        _set_parent_class_weak_reference( System, System.Config)
+        _set_factory_attributes( System, _create_factory_attributes(System.Config) )
+        if allow_config_assignment is not None:
+            System._allow_config_assignment = allow_config_assignment
+        return System 
+
+
+class BaseSystem(metaclass=SystemMeta):
     __config__ = None  
     _allow_config_assignment = False
     __factory_classes__ = set() 
@@ -386,8 +428,8 @@ class BaseSystem(ABC):
     class Config(BaseConfig):
         ...
     
-    def __init_subclass__(cls, **kwargs) -> None:
-        systemclass(cls, **kwargs)
+    # def __init_subclass__(cls, **kwargs) -> None:
+    #     systemclass(cls, **kwargs)
 
     def __init__(self,* , __config__=None, __path__= None, **kwargs):
         if isinstance(__config__, dict):
@@ -639,35 +681,20 @@ def factory(SystemClass):
 
 
 if __name__ == "__main__":
+    from abc import ABC  
+
+    class Toto(ABC):
+        pass
+
     class X(BaseSystem):
         class Config:
             x: int =0
-    class X2(BaseSystem):
+    class Y(BaseSystem):
         class Config:
-            x: int =1 
+            y: int =1
+
+    class XY(X,Y, Toto):
+        pass
     
-
-    class MyYoFD(FactoryDict):
-        def toto(self): return  1 
-
-    class M(BaseModel):
-
-        # d: FactoryDictVar[str, BaseFactory] = {}
-        # d2: FactoryDict[str, BaseFactory] = {}  
-        d2: FactoryDict[str, X.Config]= {}  
-        d3: FactoryDict = FactoryDict()
-        d4 = FactoryDict() 
-        d5: MyYoFD[int, X.Config] = {} 
-
-    # print( M(  d2 = {"a": X.Config(x=1)},  d3= {}  ) )
-
-    m =  M( d2= {'a':X2.Config()} , d4={}, d5={} )
-    print( m  ) 
-    print( m.d5.toto() )
-    print( m.__fields__['d5'])
-
-    class M(BaseModel):
-        l: FactoryList[X.Config] = []
-    M(l = [] )
 
 
