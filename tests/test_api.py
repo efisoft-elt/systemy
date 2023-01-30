@@ -386,22 +386,36 @@ def test_config_assignment():
     assert s.x == 10.0
 
 
-# def test_system_composition():
-    # class A(BaseSystem):
-        # class Config:
-            # x: int = 1  
-    # class B(BaseSystem):
-        # class Config:
-            # y: int = 2
-    # print("AAAAAAAA")
-    # class C(A, B):
-        # class Config:
-            # z = 9
-    # print("BBBBBBBBB")
-    # c = C(z=9.1) 
-    # assert c.x == 1 
-    # assert c.y == 2  
-    # assert c.z == 9
+def test_system_composition():
+    class A(BaseSystem):
+        class Config:
+            x: int = 1  
+    class B(BaseSystem):
+        class Config:
+            y: int = 2
+    class C(A, B):
+        class Config:
+            z = 9
+    c = C(z=9.1) 
+    assert c.x == 1 
+    assert c.y == 2  
+    assert c.z == 9
+
+def test_redefining_config_breaks_mro():
+    class A(BaseSystem):
+        class Config:
+            x: int = 1  
+    class B(BaseSystem):
+        class Config:
+            y: int = 2
+    class C(A, B):
+        class Config(BaseSystem.Config):
+            z = 9
+    c = C()
+    with pytest.raises( AttributeError) :
+        c.x
+    assert c.z == 9 
+
 # test_system_composition()
 
 

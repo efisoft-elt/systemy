@@ -382,13 +382,15 @@ def _collect_mro_config(mro):
         try:
             Config = cls.Config 
         except AttributeError:
-            pass 
-        if isinstance( Config, BaseConfig):
-            yield Config 
+            pass
+        else:
+            if isinstance(Config, type)  and issubclass(Config, BaseConfig):
+                yield Config 
 
 class SystemMeta(ABCMeta):
     def __new__(cls, name, mro, kwargs, **model_config):
         ParentConfigClass = tuple(_collect_mro_config(mro))
+        
         config_kwargs = {}
         
         allow_config_assignment = model_config.pop("allow_config_assignment", None)
@@ -397,9 +399,11 @@ class SystemMeta(ABCMeta):
         except KeyError:
             pass 
         else:
-            if issubclass( Config, BaseConfig):
+            if isinstance(Config, type) and  issubclass( Config, BaseConfig):
                 ParentConfigClass = (Config,)
             else:
+                if not isinstance(Config, type):
+                    raise ValueError( f"Config must be a class got a {type(Config)}")
                 config_kwargs =  _class_to_model_args(Config)
 
         if model_config:
@@ -413,6 +417,7 @@ class SystemMeta(ABCMeta):
         NewConfig = create_model( name+"Config", __base__=ParentConfigClass, **config_kwargs)
         kwargs["Config"] = NewConfig
         System = ABCMeta.__new__(cls,  name, mro, kwargs)
+        
         _set_parent_class_weak_reference( System, System.Config)
         _set_factory_attributes( System, _create_factory_attributes(System.Config) )
         if allow_config_assignment is not None:
@@ -428,9 +433,6 @@ class BaseSystem(metaclass=SystemMeta):
     class Config(BaseConfig):
         ...
     
-    # def __init_subclass__(cls, **kwargs) -> None:
-    #     systemclass(cls, **kwargs)
-
     def __init__(self,* , __config__=None, __path__= None, **kwargs):
         if isinstance(__config__, dict):
             __config__ = self.Config(**__config__)
@@ -696,5 +698,7 @@ if __name__ == "__main__":
     class XY(X,Y, Toto):
         pass
     
-
+    class X2(X):
+        pass 
+    assert isinstance( X2.Config(), X.Config)
 
