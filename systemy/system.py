@@ -6,10 +6,8 @@ import weakref
 from typing import Any, Dict, Generic, Iterable, List, Optional, Tuple, Type, TypeVar, Union, get_type_hints
 from collections import UserDict, UserList
 
-from pydantic.config import Extra
-from pydantic.error_wrappers import ValidationError
-from pydantic.fields import ModelField, PrivateAttr
-
+from pydantic import Extra,  PrivateAttr
+from pydantic.fields import ModelField
 
 
 
@@ -262,13 +260,12 @@ class FactoryAttribute:
     The factory is building the system and saving it to the parent object 
     Normaly, the FactoryAttribute is called only ones
     """
-    def __init__(self, field:FactoryField, attr=None, alias=None):
-        self.factory_field = field 
+    def __init__(self,  attr=None, alias=None):
         self.attr = attr
         self.alias = alias 
     def __get__(self, parent, cls=None):
-        if parent is None: 
-            return self.factory_field.get_default()
+        if parent is None:
+            return cls.Config.__system_factories__[self.attr].get_default()
 
         factory = getattr( parent.__config__, self.attr)
         if factory is None: # this should only append when a factory dict is optional 
@@ -353,7 +350,7 @@ def _create_factory_attributes(Config: BaseConfig) ->_AttributeDict:
     attributes = {}
     for name in get_model_fields(Config):
         if name in Config.__system_factories__:
-             attributes[name] = FactoryAttribute( Config.__system_factories__[name], name)
+             attributes[name] = FactoryAttribute(name)
         else:
             attributes[name] = ConfigParameterAttribute(name)
     return attributes 
@@ -362,6 +359,8 @@ def _create_factory_attributes(Config: BaseConfig) ->_AttributeDict:
 def _set_factory_attributes(ParentClass: "BaseSystem", attributes: _AttributeDict) -> None:
     """ Set a dictionary of attributes into the class """
     for name, obj in attributes.items():
+        # priority is on attribute defined inside the System  
+        # do not overwrite them if exists 
         try:
             getattr( ParentClass, name)
         except AttributeError:

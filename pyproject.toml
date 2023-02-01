@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "systemy"
-version = "0.2.a0"
+version = "0.2a2"
 description = "A core package to manipulate model or system hierarchical classes"
 authors = ["Sylvain Guieu <sylvain.guieu@gmail.com>"]
 readme = "README.md"
