@@ -161,8 +161,8 @@ class FactoryDictMeta(type(BaseModel)):
         if (len(items)!=2):
             raise ValueError(f"expected 2  parameters for FactoryDict[k,f]; actual {len(items)} ")
         Key, Factory = items 
-        if not issubclass( Factory, BaseFactory):
-            raise ValueError( "expecting a subclass of BaseFactory for FactoryList" )
+        # if not issubclass( Factory, BaseFactory):
+        #     raise ValueError( "expecting a subclass of BaseFactory for FactoryList" )
         return create_model( cls.__name__+"Customized", __base__=cls, __root__=(Dict[Key, Factory], ...))
 
 class FactoryDict(BaseFactory, UserDict,  metaclass=FactoryDictMeta ):
@@ -199,8 +199,8 @@ class FactoryListMeta(type(BaseModel)):
         if isinstance(items, tuple) and (len(items)!=1):
             raise ValueError(f"expected 1  parameters for FactoryList[f]; actual {len(items)} ")
         Factory = items 
-        if not issubclass( Factory, BaseFactory):
-            raise ValueError( "expecting a subclass of BaseFactory for FactoryList" )
+        # if not issubclass( Factory, BaseFactory):
+            # raise ValueError( "expecting a subclass of BaseFactory for FactoryList" )
         return create_model( cls.__name__+"Customized", __base__=cls, __root__=(List[Factory], ...))
 
 class FactoryList(BaseFactory, UserList, metaclass=FactoryListMeta):

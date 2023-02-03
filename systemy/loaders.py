@@ -1,9 +1,11 @@
 from enum import Enum
 from typing import List, Optional, Tuple
 from attr import dataclass
+from pydantic.errors import PydanticErrorMixin
 import yaml
 from .system import BaseFactory, BaseSystem
 from py_expression_eval import Parser 
+from pydantic import ValidationError
 import math 
 import re
 import os
@@ -178,12 +180,19 @@ def _get_factory_from_tag_suffix(tag_suffix):
         return get_factory_class(tag_suffix)
 
 def factory_constructor(loader, tag_suffix, node):
+    
     Factory = _get_factory_from_tag_suffix(tag_suffix)
     if isinstance(node, yaml.MappingNode):
         raw = loader.construct_mapping(node, deep=True)
+    elif isinstance( node, yaml.ScalarNode):
+        raw = loader.construct_scalar(node) 
+    elif isinstance( node, yaml.SequenceNode):
+        raw = loader.construct_sequence(node, deep=True)
     else:
         raise ValueError("object flag expecting a map")
-    return Factory.parse_obj(raw)
+    return validate_factory(Factory, raw)
+    
+
 add_multi_constructor( YamlTags.FACTORY, factory_constructor)
 
 
@@ -191,6 +200,18 @@ def math_constructor(loader, node):
     return _math_parser.parse(loader.construct_scalar(node)).evaluate(_math_args)
 add_constructor( YamlTags.MATH, math_constructor)
 
+def validate_factory(Factory, raw):
+    errors = []
+    for validator in Factory.__get_validators__():
+        
+        try:
+            value = validator( raw )
+        except (ValueError, KeyError, TypeError, ValidationError ) as e:
+            errors.append(e)
+        else:
+            return value 
+    
+    raise ValidationError(errors, Factory) 
 
 
 def include_constructor(loader, tag_suffix, node):
@@ -206,12 +227,12 @@ def include_constructor(loader, tag_suffix, node):
     
     file_name, path = io.resolve(tag_suffix.strip())
     
-    
     with open(file_name, "r") as f :
         src = yaml.load(f.read(), loader.__class__)
-    
+        src = goto_target(src, path)
+
     if not isinstance( src, BaseFactory):
-        raise ValueError("Include file must be factory")
+        raise ValueError("Include target must be factory")
     
     for k,v in data.items():
         setattr( src, k, v)
@@ -232,4 +253,12 @@ def parse_file_name(file_name: str):
     return file.strip(' '), tuple( p for p in path.strip(' ').split('.') if p)
 
 
+def goto_target(src, path):
+    if path is None: return src 
+    for item in path:
+        if isinstance(src, BaseFactory):
+            src = getattr(src,item)
+        else:
+            src = src[item]
+    return src
 
