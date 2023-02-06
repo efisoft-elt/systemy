@@ -15,6 +15,8 @@ def get_model_fields(model):
     return model.__fields__ 
 def get_model_config(model):
     return model.__config__ 
+def get_factory_fields(model):
+    return model.__system_factories__ 
 
 
 @dataclass
@@ -75,7 +77,7 @@ class BaseFactory(BaseModel, ABC):
             return 
         
         factories = {}
-        for attr, field in cls.__fields__.items():
+        for attr, field in get_model_fields(cls).items():
             if isinstance( field.type_, type) and issubclass( field.type_, BaseFactory):
                 factory_field = FactoryField(field.type_, field)
                 # Warning, this can modify the field.default property 
@@ -276,68 +278,8 @@ class FactoryAttribute:
         if self.attr is None:
             self.attr = name 
 
-# def _rebuild_config_class(ParentClass: "BaseSystem", Config: BaseConfig, kwargs: Dict) -> Type[BaseConfig]:
-#     """ Rebuild the Config class associated to a ParentClass 
 
-#     At least the Config is always inerited in order to modify it with 
-#     new kwargs and to mutate the weak reference to the parent class
-#     """
-    
-#     ParentConfigClasses = []
-#     for subcl in ParentClass.__mro__[1:]:
-#         try:
-#             ParentConfigClass = getattr(subcl, "Config")
-#         except AttributeError:
-#             continue
-#         else:
-#             if not ParentConfigClass  in ParentConfigClasses:
 
-#                 ParentConfigClasses.append( ParentConfigClass)
-     
-#     if not issubclass(Config, BaseFactory):
-#         field_def = _class_to_model_args(Config)
-#     else:
-#         if not Config in ParentConfigClasses:
-#             ParentConfigClasses.append(Config)
-#         field_def = {}
-#     if not ParentConfigClasses:
-#         raise ValueError("Bug ! Not a subclass of BaseSystem")
-#     if kwargs:
-#         if "Config" in field_def: 
-#              raise TypeError("Specifying config in two places is ambiguous, use either Config attribute or class kwargs")
-#         field_def["Config"] = type("Config", tuple(), kwargs)
-#     NewConfig =  create_model(  ParentClass.__name__+".Config",  __base__= tuple(ParentConfigClasses),  **field_def)        
-#     return NewConfig
-
-def _rebuild_config_class(ParentClass: "BaseSystem", Config: BaseConfig, kwargs: Dict) -> Type[BaseConfig]:
-    """ Rebuild the Config class associated to a ParentClass 
-
-    At least the Config is always inerited in order to modify it with 
-    new kwargs and to mutate the weak reference to the parent class
-    """
-    
-         
-    if not issubclass(Config, BaseFactory):
-        for subcl in ParentClass.__mro__[1:]:
-            try:
-                ParentConfigClass = getattr(subcl, "Config")
-            except AttributeError:
-                continue
-            else:
-                break
-        else: 
-            raise ValueError("Cannot found config")
-        field_def = _class_to_model_args(Config)
-
-    else:
-        ParentConfigClass = Config     
-        field_def = {}
-    if kwargs:
-        if "Config" in field_def: 
-             raise TypeError("Specifying config in two places is ambiguous, use either Config attribute or class kwargs")
-        field_def["Config"] = type("Config", tuple(), kwargs)
-    NewConfig =  create_model(  ParentClass.__name__+".Config",  __base__= ParentConfigClass,  **field_def)        
-    return NewConfig
 
 def _set_parent_class_weak_reference(ParentClass: "BaseSystem", Config: BaseConfig) -> None:
     """ Set a reference in Config pointing to the ParentClass """
@@ -367,15 +309,6 @@ def _set_factory_attributes(ParentClass: "BaseSystem", attributes: _AttributeDic
             setattr(ParentClass, name, obj)
 
 
-def systemclass(cls,  allow_config_assignment=None, **kwargs):
-    """ Prepare a System class type """
-    cls.Config = _rebuild_config_class(cls, cls.Config, kwargs)
-    _set_parent_class_weak_reference( cls, cls.Config)
-    _set_factory_attributes( cls, _create_factory_attributes(cls.Config) ) 
-    if allow_config_assignment is not None:
-        cls._allow_config_assignment = allow_config_assignment
-    return cls
-
 def _collect_mro_config(mro):
     for cls in mro:
         try:
@@ -393,6 +326,7 @@ class SystemMeta(ABCMeta):
         config_kwargs = {}
         
         allow_config_assignment = model_config.pop("allow_config_assignment", None)
+        config_doc = None
         try:
             Config = kwargs["Config"]
         except KeyError:
@@ -404,6 +338,8 @@ class SystemMeta(ABCMeta):
                 if not isinstance(Config, type):
                     raise ValueError( f"Config must be a class got a {type(Config)}")
                 config_kwargs =  _class_to_model_args(Config)
+            
+            config_doc = Config.__doc__
 
         if model_config:
             if "Config" in config_kwargs: 
@@ -414,6 +350,9 @@ class SystemMeta(ABCMeta):
             ParentConfigClass = BaseConfig
         
         NewConfig = create_model( name+"Config", __base__=ParentConfigClass, **config_kwargs)
+        if config_doc is not None:
+            NewConfig.__doc__ = config_doc
+
         kwargs["Config"] = NewConfig
         System = ABCMeta.__new__(cls,  name, mro, kwargs)
         
@@ -421,6 +360,7 @@ class SystemMeta(ABCMeta):
         _set_factory_attributes( System, _create_factory_attributes(System.Config) )
         if allow_config_assignment is not None:
             System._allow_config_assignment = allow_config_assignment
+
         return System 
 
 
@@ -470,16 +410,27 @@ class BaseSystem(metaclass=SystemMeta):
         for key, value in kwargs.items():
              setattr(self.__config__, key, value)
 
-    def find(self, SystemType: Type["BaseSystem"], depth: int=0)-> Iterable:
-        # self._build_all()
+    
+    def find(self, SystemType: Type["BaseSystem"], depth: int=0, exclude_factories: List = [])-> Iterable:
+        
         for attr in dir(self):
             if attr.startswith("__"): continue
-            # durty patch to avoid side effect of failing property  
-            # 
+
+            try:
+                factory = get_factory(  self, attr)
+            except ValueError:
+                # would like to just skeep if no factory found but 
+                # they are still some rare case where factory is hidden 
+                # continue
+                factory = None
+            
+            if factory and factory in exclude_factories:
+                continue 
+            
             try:
                 obj = getattr(self, attr)
             except (ValueError, AttributeError, KeyError) as e:
-                if has_factory( self.__class__, attr):
+                if factory:
                     raise e
                 else:
                     continue 
@@ -487,9 +438,12 @@ class BaseSystem(metaclass=SystemMeta):
                 yield obj
 
             if depth and _is_subsystem_iterable(obj):
-                for other in obj.find(SystemType, depth-1):
+                for other in obj.find( SystemType, depth-1, exclude_factories):
                     yield other 
-  
+
+   
+
+
     def children(self, SystemType: Optional[Type["BaseSystem"]] = None):
         if SystemType is None:
             SystemType = BaseSystem
@@ -506,14 +460,13 @@ class BaseSystem(metaclass=SystemMeta):
             if isinstance(obj, SystemType):
                 yield attr
 
-
     
 class SystemDict(UserDict):
 
     def __setitem__(self, key, system):
         super().__setitem__(key, self.__parse_item__(system, key))    
             
-    def find(self, SystemType: Type[BaseSystem], depth: int =0):
+    def find(self, SystemType: Type[BaseSystem], depth: int =0, exclude_factories: List = []):
         for system in self.values():
             if isinstance(system, SystemType):
                 yield system 
@@ -560,7 +513,7 @@ class SystemList(UserList):
         system = self.__parse_item__(system , index)
         super().__setitem__(index, system)    
             
-    def find(self, SystemType: Type[BaseSystem], depth: int =0):
+    def find(self, SystemType: Type[BaseSystem], depth: int =0, exclude_factories: List = []):
         for system in self:
             if isinstance(system, SystemType):
                 yield system 
@@ -660,6 +613,32 @@ def has_factory(cls: Type[BaseSystem], attr: str)-> bool:
     except AttributeError:
         return False 
     return isinstance( factory, BaseFactory)
+
+def get_factory(obj: BaseSystem, attr: str):
+    try:
+        factory = getattr(obj.__class__, attr)
+    except AttributeError:
+        if hasattr( obj, "__config__"):
+            return _get_config_factory( obj.__config__, attr)
+        else:
+            ValueError( f"attribute {attr} is not a factory" )
+    else:
+        if not isinstance( factory, BaseFactory):
+            raise ValueError( f"attribute {attr} is not a factory" )
+        return factory 
+
+def _get_config_factory(config, attr ):
+    try:
+        factory = getattr(config, attr)
+    except AttributeError:
+        raise ValueError("attribute {attr} is not a factory")
+    else:
+        if not isinstance( factory, BaseFactory):
+            raise ValueError( f"attribute {attr} is not a factory" )
+        return factory 
+
+
+
 
 def factory(SystemClass):
     """ a decorator on a factory class 

@@ -12,7 +12,6 @@ from .system import (
         get_model_config, 
         factory, 
 
-        systemclass # !! TO REMOVE 
     )
 from .loaders import (
         SystemLoader,
@@ -24,4 +23,4 @@ from .loaders import (
         iter_system_class
     ) 
 from .storedproperty import storedproperty 
-
+from .autodoc import autodoc

@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Union
 import pytest
 
-from systemy.system import BaseFactory, BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemDict, SystemList, factory , find_factories,  has_factory
+from systemy.system import BaseFactory, BaseSystem, BaseConfig, FactoryDict, FactoryList, SystemDict, SystemList, factory , find_factories, get_factory,  has_factory
 
 def test_config_class_creation():
     
@@ -417,6 +417,40 @@ def test_redefining_config_breaks_mro():
     assert c.z == 9 
 
 # test_system_composition()
+
+
+
+def test_get_factory():
+    class A(BaseSystem):
+        class Config:
+            x: int = 1  
+    class B(BaseSystem):
+        class Config:
+            y: int = 2
+    
+    class C(BaseSystem):
+        a = A.Config()
+        b = B.Config()
+        d = FactoryDict( {} )
+    c = C()
+    assert get_factory(c, "a") == C.a
+    assert get_factory(c, "d") == C.d
+    
+    # test in config and extra 
+    class C(BaseSystem, extra="allow"):
+        class Config:
+            a = A.Config()
+            b = B.Config()
+            d = FactoryDict( {} )
+    c = C( aa=A.Config(), dd=FactoryDict( {} ), ll=FactoryList( [] ) )
+    assert get_factory(c, "a") == C.a
+    assert get_factory(c, "d") == C.d
+    assert isinstance( get_factory(c, "aa"), A.Config)   
+    assert isinstance( get_factory(c, "dd"), FactoryDict) 
+    assert isinstance( get_factory(c, "ll"), FactoryList) 
+    
+    
+
 
 
 if __name__=="__main__":
