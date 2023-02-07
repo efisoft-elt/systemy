@@ -3,10 +3,10 @@
 def storedproperty(func):
     """ Decorator for a property stored inside the parent object
     
-    The build function is called only ones and the property is stored inside 
+    The parameter is built ones and the property is stored inside 
     the parent.__dict__ 
-    This is to be used when a property needs to be build the first time 
-    it is used only to avoid to build an element at each access  
+    This is to be used when heavy property needs to be build the first time 
+    it is used and to avoid to build an element at each access  
     
     Example::
 

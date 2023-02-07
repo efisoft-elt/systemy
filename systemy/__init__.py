@@ -24,3 +24,4 @@ from .loaders import (
     ) 
 from .storedproperty import storedproperty 
 from .autodoc import autodoc
+from .filter import FilterFactory
