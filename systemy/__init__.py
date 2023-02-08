@@ -25,3 +25,10 @@ from .loaders import (
 from .storedproperty import storedproperty 
 from .autodoc import autodoc
 from .filter import FilterFactory
+from .pypath import (
+    PyPath, 
+    ObjPath, 
+    TuplePath, 
+    AttrPath, 
+    ItemPath
+)

@@ -9,7 +9,9 @@ from collections import UserDict, UserList
 from pydantic import Extra,  PrivateAttr
 from pydantic.fields import ModelField
 
+from systemy.pypath import PyPath
 
+INIT_VALUE_KEYWORD = "__"
 
 def get_model_fields(model):
     return model.__fields__ 
@@ -84,6 +86,15 @@ class BaseFactory(BaseModel, ABC):
                 factory_field._fix_field_default()
                 factories[attr] = factory_field  
         cls.__system_factories__ = factories 
+    
+    def __init__(self, *args, **kwargs):
+        initvalues  = kwargs.pop(INIT_VALUE_KEYWORD, None) 
+        super().__init__(*args, **kwargs)
+        if initvalues: 
+            for p, v in initvalues.items():
+                p = PyPath(p) 
+                p.set_value( self, v)
+
 
     @classmethod
     def get_system_class(cls):
