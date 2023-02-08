@@ -187,6 +187,7 @@ class FactoryDict(BaseFactory, UserDict,  metaclass=FactoryDictMeta ):
     def __setitem__(self, key, value):
         if not isinstance(value, self.__Factory__):
             raise KeyError( f'item {key} is not a {self.__Factory__.__name__}')
+        self.__root__[key] = value 
     def build(self, parent=None, name="") -> "SystemDict":
         system_dict =  SystemDict( 
                 {key:factory.build(parent, name+"['"+str(key)+"']") for key,factory in self.items() }
@@ -225,6 +226,7 @@ class FactoryList(BaseFactory, UserList, metaclass=FactoryListMeta):
     def __setitem__(self, index, value):
         if not isinstance(value, self.__Factory__):
             raise KeyError( f'item {index} is not a Factory')
+        self.__root__.__setitem__(index, value)
     def build(self, parent=None, name="") -> "SystemList":
         system_list = SystemList( 
                 [factory.build(parent, name+"["+str(i)+"]") for i, factory in enumerate(self) ]
