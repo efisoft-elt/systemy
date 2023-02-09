@@ -11,7 +11,7 @@ from pydantic.fields import ModelField
 
 from systemy.pypath import PyPath
 
-INIT_VALUE_KEYWORD = "__"
+INIT_VALUE_KEYWORD = "__setup"
 
 def get_model_fields(model):
     return model.__fields__ 
