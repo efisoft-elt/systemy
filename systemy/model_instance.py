@@ -1,4 +1,5 @@
 
+from attr import Factory
 from pydantic import ValidationError, BaseModel
 
 from systemy.loaders import get_factory_class
@@ -50,9 +51,12 @@ class InstanceOf(metaclass=InstanceOfMeta):
         if isinstance( value, dict):
             factory = value.pop("__factory__", None)
             if factory:
-                Factory = get_factory_class( factory )
+                if isinstance(factory, type) and issubclass( factory, BaseModel):
+                    Factory = factory 
+                else:
+                    Factory = get_factory_class( factory )
                 if not issubclass( Factory, cls.__BaseClass__):
-                    raise ValueError( f"Factory {factory} is not aa subclass of {cls.__BaseClass__.__name__}")
+                    raise ValueError( f"Factory {factory} is not a subclass of {cls.__BaseClass__.__name__}")
                 return Factory.validate(value)  
         
         #################
