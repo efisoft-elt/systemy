@@ -32,3 +32,5 @@ from .pypath import (
     AttrPath, 
     ItemPath
 )
+from .model_instance import InstanceOf, strict 
+

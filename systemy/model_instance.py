@@ -1,4 +1,5 @@
 
+from enum import Enum
 from attr import Factory
 from pydantic import ValidationError, BaseModel
 
@@ -31,7 +32,7 @@ class InstanceOfMeta(type):
         if isinstance(item, tuple):
             raise ValueError("ModelInstance takes only one subfield ")
         # quizz of the order ?? 
-        return type("ModelInstance["+item.__name__+"]", (cls,), {'__BaseClass__': item})
+        return type("InstanceOf["+item.__name__+"]", (cls,), {'__BaseClass__': item})
 
 
 class InstanceOf(metaclass=InstanceOfMeta):
@@ -60,8 +61,19 @@ class InstanceOf(metaclass=InstanceOfMeta):
                 return Factory.validate(value)  
         
         #################
-        # replace this to something more custom if needed 
-        for SubClass in all_subclasses(cls.__BaseClass__)[::-1]:
+        # replace this to something more custom if needed
+        
+        # Try first as dictionary 
+        
+        subclasses = all_subclasses(cls.__BaseClass__)[::-1]
+        if isinstance( value, dict):
+            for SubClass in subclasses:
+                try:
+                    return SubClass(**value)
+                except (ValidationError, ValueError, AttributeError, KeyError) as err:
+                    errors.append(err)
+
+        for SubClass in subclasses:
             for validator in SubClass.__get_validators__():
                 try:
                     return validator(value)
@@ -73,4 +85,9 @@ class InstanceOf(metaclass=InstanceOfMeta):
         else:
             raise ValueError( ['cannot find a valid subclass'], cls)
 
-
+def strict(value):
+    """ Implement a strict validator for a model 
+    
+    the input should always be value
+    """
+    return Enum("Strick", {"V":value}).V

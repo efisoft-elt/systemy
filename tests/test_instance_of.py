@@ -2,11 +2,13 @@ from pydantic.main import BaseModel
 import pytest
 from systemy.loaders import register_factory
 
-from systemy.model_instance import InstanceOf
+from systemy.model_instance import InstanceOf, strict 
 from systemy.system import BaseFactory
 
 class MyBase(BaseFactory):
-    pass 
+    def build(self, parent=None, name=None):
+        return None
+
 
 @register_factory
 class F(MyBase):
@@ -36,6 +38,20 @@ class NotAMyBase(BaseFactory):
     pass
 
 
+
+class S1(MyBase):
+    kind = strict("S1")
+    x = 1
+class S2(MyBase):
+    kind = strict("S2") 
+    x = 2
+
+class S(BaseFactory):
+    s:  InstanceOf[MyBase] 
+    def build(self, parent=None, name=None):
+        return self.s.x 
+
+
 class M(BaseModel):
     f : InstanceOf[MyBase] 
 
@@ -63,3 +79,11 @@ def test_validation_error_when_bad_factory():
     
     with pytest.raises(ValueError):
         M( f={"__factory__":"NotAMyBase"})
+
+
+def test_strict_validator():
+    
+    f = S( s={'kind':'S1'})
+    assert f.s.x == 1
+    f = S( s={'kind':'S2'})
+    assert f.s.x == 2
