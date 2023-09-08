@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Union
-from pydantic.fields import ModelField
+try:
+    from pydantic.v1.fields import ModelField
+except ModuleNotFoundError:
+    from pydantic.fields import ModelField
+
 from systemy.system import BaseFactory, BaseSystem, get_factory, get_factory_fields, get_model_fields , FactoryField
 
 import re
@@ -116,7 +120,11 @@ def autodoc(SystemOrFactory: Union[BaseSystem, BaseFactory] = None , exclude=set
 
 
 if __name__== "__main__":
-    from pydantic import Field  
+    try:
+        from pydantic.v1 import Field  
+    except ModuleNotFoundError:
+        from pydantic import Field  
+
     class B(BaseSystem):
         class Config:
             """ __autodoc__ """

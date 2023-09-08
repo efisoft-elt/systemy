@@ -1,6 +1,9 @@
 from typing import Callable, Iterable, Set, Type
 
-from pydantic  import Field
+try: 
+    from pydantic.v1  import Field
+except ModuleNotFoundError:
+    from pydantic  import Field
 from .system import BaseFactory, BaseSystem, SystemList
 from .autodoc import autodoc 
 

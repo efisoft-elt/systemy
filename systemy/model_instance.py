@@ -1,7 +1,11 @@
 
 from enum import Enum
 from attr import Factory
-from pydantic import ValidationError, BaseModel
+
+try:
+    from pydantic.v1 import ValidationError, BaseModel
+except ModuleNotFoundError:
+    from pydantic import ValidationError, BaseModel
 
 from systemy.loaders import get_factory_class
 

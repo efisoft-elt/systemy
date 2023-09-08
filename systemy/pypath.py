@@ -1,8 +1,12 @@
 import re
 from typing import Any, Generic, Tuple, TypeVar, Union
+try:
+    from pydantic.v1.error_wrappers import ValidationError
+    from pydantic.v1.fields import ModelField
+except ModuleNotFoundError:
+    from pydantic.error_wrappers import ValidationError
+    from pydantic.fields import ModelField
 
-from pydantic.error_wrappers import ValidationError
-from pydantic.fields import ModelField
 
 
 _path_glv = {

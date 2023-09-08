@@ -11,7 +11,12 @@
 
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Tuple, Type, Union
-from pydantic import BaseModel, create_model
+
+try: 
+    from pydantic.v1  import BaseModel, create_model
+except ModuleNotFoundError:
+    from pydantic  import BaseModel, create_model
+
 from systemy.system import get_model_fields
 
 @dataclass

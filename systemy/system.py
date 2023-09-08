@@ -1,13 +1,18 @@
 from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from pydantic import create_model, Field, BaseModel
+
+try:
+    from pydantic.v1 import create_model, Field, BaseModel, Extra, PrivateAttr
+    from pydantic.v1.fields import ModelField
+
+except ModuleNotFoundError:
+    from pydantic import create_model, Field, BaseModel, Extra, PrivateAttr
+    from pydantic.fields import ModelField
+
 import weakref 
 from typing import Any, Dict, Generic, Iterable, List, Optional, Tuple, Type, TypeVar, Union, get_type_hints
 from collections import UserDict, UserList
-
-from pydantic import Extra,  PrivateAttr
-from pydantic.fields import ModelField
 
 from systemy.pypath import PyPath
 

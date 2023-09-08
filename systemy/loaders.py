@@ -1,11 +1,15 @@
 from enum import Enum
 from typing import List, Optional, Tuple
 from attr import dataclass
-from pydantic.errors import PydanticErrorMixin
+
 import yaml
 from .system import BaseFactory, BaseSystem
 from py_expression_eval import Parser 
-from pydantic import ValidationError
+try:
+    from pydantic.v1 import ValidationError
+except ModuleNotFoundError:
+    from pydantic import ValidationError
+
 import math 
 import re
 import os

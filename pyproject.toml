@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "systemy"
-version = "0.2a8"
+version = "0.2a9"
 description = "A core package to manipulate model or system hierarchical classes"
 authors = ["Sylvain Guieu <sylvain.guieu@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.7"
-pydantic = "^1.9.0"
+pydantic = ">=1.10.0"
 pyyaml = "^6.0"
 attrs = "^22.2.0"
 py-expression-eval = "^0.3.14"
